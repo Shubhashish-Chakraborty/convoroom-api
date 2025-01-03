@@ -1,8 +1,8 @@
-import { WebSocketServer } from "ws";
+import { WebSocketServer , WebSocket } from "ws";
 const wss = new WebSocketServer({port:3000});
 
 let userCount = 0;
-let allSocket = [];
+let allSocket:WebSocket[] = [];
 
 
 wss.on("connection" , (socket) => {
@@ -17,7 +17,11 @@ wss.on("connection" , (socket) => {
         allSocket.forEach((s) => {
             s.send(`${e.toString()}`)
         })
-        
+    })
+
+    // whenever a user/socket disconnects remove that socket from the global arrray:
+    socket.on("disconnect" , () => {
+        allSocket = allSocket.filter(x => x != socket);
     })
             
 })
