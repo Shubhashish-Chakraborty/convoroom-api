@@ -1,27 +1,44 @@
 import { WebSocketServer , WebSocket } from "ws";
 const wss = new WebSocketServer({port:3000});
 
-let userCount = 0;
-let allSocket:WebSocket[] = [];
+
+interface User {
+    socket: WebSocket,
+    room: string
+}
+
+let allSocket: User[] = [];
 
 
 wss.on("connection" , (socket) => {
-    allSocket.push(socket);
 
-    userCount += 1;
-    console.log(`User:${userCount} Connected to the WebSocket Server!`);
+    console.log("SOMEONE CONNECTED TO THE SERVER");
+    
+    socket.on("message" , (message) => {
+        const parsedMessage = JSON.parse(message as unknown as string); // or tsignore as your wish
 
-    socket.on("message" , (e) => {
-        // console.log(`${e.toString()}: => message sent from the server!`);        
-        // we've to send message to all the users/sockets
-        allSocket.forEach((s) => {
-            s.send(`${e.toString()}`)
-        })
+        
+        if (parsedMessage.type === "join") { // if the person wants to join the room then you'll push to the allSocket
+            console.log(`${parsedMessage.payload.name} Joined the room: ${parsedMessage.payload.roomId}`);
+            
+            allSocket.push({
+                socket,
+                room: parsedMessage.payload.roomId
+            })
+        }
+        if (parsedMessage.type === "chat") {
+            console.log(`${parsedMessage.payload.name} Messaged: ${parsedMessage.payload.textMessage}`);
+
+            const currentUserRoom = allSocket.find((x) => x.socket == socket)?.room;
+
+            allSocket.forEach((userObj) => {
+                if (userObj.room == currentUserRoom) {
+                    userObj.socket.send(parsedMessage.payload.textMessage)
+                }
+            })            
+        }
+
     })
 
-    // whenever a user/socket disconnects remove that socket from the global arrray:
-    socket.on("disconnect" , () => {
-        allSocket = allSocket.filter(x => x != socket);
-    })
             
 })
