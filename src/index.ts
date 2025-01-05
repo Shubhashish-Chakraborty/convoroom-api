@@ -27,7 +27,7 @@ wss.on("connection" , (socket) => {
             })
         }
         if (parsedMessage.type === "chat") {
-            console.log(`${parsedMessage.payload.name} Messaged: ${parsedMessage.payload.textMessage}`);
+            // console.log(`${parsedMessage.payload.name} Messaged: ${parsedMessage.payload.textMessage}`);
 
             const currentUserRoom = allSocket.find((x) => x.socket == socket)?.room;
 
