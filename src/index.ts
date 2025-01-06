@@ -50,14 +50,14 @@ let allSocket: User[] = [];
 
 let userCount = 0;
 
-wss.on("connection" , (socket) => {
+wss.on("connection" , (socket:WebSocket) => {
 
     userCount += 1;
     console.log(`User Connected to the Server: ${userCount}`);
     
-    socket.on("message" , (message) => {
+    socket.on("message" , (message:string | Buffer) => {
         // or tsignore as your wish
-        const parsedMessage = JSON.parse(message as unknown as string); // Message that came from the client "{...}"
+        const parsedMessage = JSON.parse(message.toString()); // Message that came from the client "{...}"
         
         // if someone wants to join a room!
         if (parsedMessage.type === "join") { // if the person wants to join the room then you'll push to the allSocket
