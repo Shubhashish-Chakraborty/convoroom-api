@@ -1,5 +1,5 @@
-import { WebSocketServer , WebSocket } from "ws";
-const wss = new WebSocketServer({port:3000});
+import { WebSocketServer, WebSocket } from "ws";
+const wss = new WebSocketServer({ port: 3000 });
 
 // Client Message Schemas:
 
@@ -50,36 +50,43 @@ let allSocket: User[] = [];
 
 let userCount = 0;
 
-wss.on("connection" , (socket:WebSocket) => {
+wss.on("connection", (socket: WebSocket) => {
 
     userCount += 1;
     console.log(`User Connected to the Server: ${userCount}`);
-    
-    socket.on("message" , (message:string | Buffer) => {
+
+    socket.on("message", (message: string | Buffer) => {
         // or tsignore as your wish
         const parsedMessage = JSON.parse(message.toString()); // Message that came from the client "{...}"
-        
-        // if someone wants to join a room!
-        if (parsedMessage.type === "join") { // if the person wants to join the room then you'll push to the allSocket
-        
-            allSocket.push({
-                socket,
-                room: parsedMessage.payload.roomId,
-                name: parsedMessage.payload.username
-            })
-            
-            // Notify all users in the same room that someone joined
 
-            const currentUserRoom = allSocket.find((x) => x.socket == socket)?.room;
-            allSocket.forEach((user) => {
-                if (user.room == currentUserRoom) {
-                    user.socket.send(`${parsedMessage.payload.username} Joined room: ${parsedMessage.payload.roomId}`);
-                    //
-                    console.log(`${parsedMessage.payload.username} Joined room: ${parsedMessage.payload.roomId}`);                    
-                }
-            })
+        // if someone wants to join a room!
+        if (parsedMessage.type === "join") {
+            // Check if the user already exists in the room
+            const existingUser = allSocket.find(
+                (user) => user.socket === socket && user.room === parsedMessage.payload.roomId
+            );
+
+            if (!existingUser) {
+                allSocket.push({
+                    socket,
+                    room: parsedMessage.payload.roomId,
+                    name: parsedMessage.payload.username
+                });
+
+                // Notify all users in the same room
+                allSocket.forEach((user) => {
+                    if (user.room === parsedMessage.payload.roomId) {
+                        user.socket.send(`${parsedMessage.payload.username} Joined room: ${parsedMessage.payload.roomId}`);
+                    }
+                });
+
+                console.log(`${parsedMessage.payload.username} Joined room: ${parsedMessage.payload.roomId}`);
+            } else {
+                console.log(`${parsedMessage.payload.username} is already in room: ${parsedMessage.payload.roomId}`);
+            }
         }
-        
+
+
         // now the user has joined there room and they want to chat!, within there members:
         if (parsedMessage.type === "chat") {
             // console.log(`${parsedMessage.payload.username} Messaged: ${parsedMessage.payload.textMessage}`);
@@ -95,7 +102,7 @@ wss.on("connection" , (socket:WebSocket) => {
                     }))
                     // userObj.socket.send(`${currentUserName} messaged: ${parsedMessage.payload.textMessage}`)
                 }
-            })            
+            })
         }
 
         // If the user wants to leave the room (this can be a new message type)
@@ -124,5 +131,5 @@ wss.on("connection" , (socket:WebSocket) => {
         console.log(`User disconnected. Users remaining: ${userCount}`);
     });
 
-            
+
 })
