@@ -98,7 +98,8 @@ wss.on("connection", (socket: WebSocket) => {
                 if (userObj.room == currentUserRoom) {
                     userObj.socket.send(JSON.stringify({
                         message: parsedMessage.payload.textMessage,
-                        name: currentUserName
+                        name: currentUserName,
+                        room: currentUserRoom
                     }))
                     // userObj.socket.send(`${currentUserName} messaged: ${parsedMessage.payload.textMessage}`)
                 }
