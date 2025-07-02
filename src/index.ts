@@ -1,4 +1,4 @@
-import WebSocket , { WebSocketServer } from "ws";
+import WebSocket, { WebSocketServer } from "ws";
 const wss = new WebSocketServer({ port: 3000 });
 
 // Client Message Schemas:
@@ -41,96 +41,113 @@ const wss = new WebSocketServer({ port: 3000 });
 // }
 
 interface User {
-    socket: WebSocket,
-    room: string,
-    name: string
+    socket: WebSocket;
+    room: string;
+    name: string;
 }
 
-let allSocket: User[] = [];
-
+let allUsers: User[] = [];
 let userCount = 0;
 
 wss.on("connection", (socket: WebSocket) => {
-
     userCount += 1;
     console.log(`User Connected to the Server: ${userCount}`);
 
     socket.on("message", (message: string | Buffer) => {
-        // or tsignore as your wish
-        const parsedMessage = JSON.parse(message.toString()); // Message that came from the client "{...}"
+        try {
+            const parsedMessage = JSON.parse(message.toString());
 
-        // if someone wants to join a room!
-        if (parsedMessage.type === "join") {
-            // Check if the user already exists in the room
-            const existingUser = allSocket.find(
-                (user) => user.socket === socket && user.room === parsedMessage.payload.roomId
-            );
+            if (parsedMessage.type === "join") {
+                const { roomId, username } = parsedMessage.payload;
+                const existingUser = allUsers.find(
+                    (user) => user.socket === socket && user.room === roomId
+                );
 
-            if (!existingUser) {
-                allSocket.push({
-                    socket,
-                    room: parsedMessage.payload.roomId,
-                    name: parsedMessage.payload.username
-                });
+                if (!existingUser) {
+                    const newUser = {
+                        socket,
+                        room: roomId,
+                        name: username
+                    };
+                    allUsers.push(newUser);
 
-                // Notify all users in the same room
-                allSocket.forEach((user) => {
-                    if (user.room === parsedMessage.payload.roomId) {
-                        user.socket.send(`${parsedMessage.payload.username} Joined room: ${parsedMessage.payload.roomId}`);
-                    }
-                });
+                    // Send welcome message to the new user
+                    socket.send(JSON.stringify({
+                        type: "system",
+                        message: `Welcome to room ${roomId}!`,
+                        room: roomId
+                    }));
 
-                console.log(`${parsedMessage.payload.username} Joined room: ${parsedMessage.payload.roomId}`);
-            } else {
-                console.log(`${parsedMessage.payload.username} is already in room: ${parsedMessage.payload.roomId}`);
+                    // Notify other users in the room
+                    broadcastToRoom(roomId, {
+                        type: "system",
+                        message: `${username} joined the room`,
+                        room: roomId
+                    }, socket); // Exclude the new user from this notification
+
+                    console.log(`${username} joined room: ${roomId}`);
+                }
             }
-        }
 
-
-        // now the user has joined there room and they want to chat!, within there members:
-        if (parsedMessage.type === "chat") {
-            // console.log(`${parsedMessage.payload.username} Messaged: ${parsedMessage.payload.textMessage}`);
-
-            const currentUserRoom = allSocket.find((x) => x.socket == socket)?.room;
-            const currentUserName = allSocket.find((x) => x.socket == socket)?.name;
-
-            allSocket.forEach((userObj) => {
-                if (userObj.room == currentUserRoom) {
-                    userObj.socket.send(JSON.stringify({
+            if (parsedMessage.type === "chat") {
+                const user = allUsers.find((u) => u.socket === socket);
+                if (user) {
+                    broadcastToRoom(user.room, {
+                        type: "chat",
                         message: parsedMessage.payload.textMessage,
-                        name: currentUserName,
-                        room: currentUserRoom
-                    }))
-                    // userObj.socket.send(`${currentUserName} messaged: ${parsedMessage.payload.textMessage}`)
+                        name: user.name,
+                        room: user.room,
+                        timestamp: new Date().toISOString()
+                    }, socket); // Exclude sender from broadcast (they'll get optimistic update)
                 }
-            })
-        }
+            }
 
-        // If the user wants to leave the room (this can be a new message type)
-        if (parsedMessage.type === "leave") {
-            const currentUserRoom = allSocket.find((x) => x.socket === socket)?.room;
-            const currentUserName = allSocket.find((x) => x.socket === socket)?.name;
+            if (parsedMessage.type === "leave") {
+                const userIndex = allUsers.findIndex((u) => u.socket === socket);
+                if (userIndex !== -1) {
+                    const leavingUser = allUsers[userIndex];
+                    allUsers.splice(userIndex, 1);
 
-            // Remove user from the room
-            allSocket = allSocket.filter(user => user.socket !== socket);
+                    broadcastToRoom(leavingUser.room, {
+                        type: "system",
+                        message: `${leavingUser.name} left the room`,
+                        room: leavingUser.room
+                    });
 
-            // Notify other users in the same room that someone left
-            allSocket.forEach((user) => {
-                if (user.room === currentUserRoom) {
-                    user.socket.send(`${currentUserName} left room: ${currentUserRoom}`);
-                    console.log(`${currentUserName} left room: ${currentUserRoom}`);
+                    console.log(`${leavingUser.name} left room: ${leavingUser.room}`);
                 }
-            });
-        }
+            }
 
-    })
+        } catch (error) {
+            console.error("Error processing message:", error);
+        }
+    });
 
     socket.on("close", () => {
         userCount -= 1;
-        // Remove the user from the allSocket array on disconnect
-        allSocket = allSocket.filter((user) => user.socket !== socket);
+        const disconnectedUser = allUsers.find((user) => user.socket === socket);
+
+        if (disconnectedUser) {
+            allUsers = allUsers.filter((user) => user.socket !== socket);
+            broadcastToRoom(disconnectedUser.room, {
+                type: "system",
+                message: `${disconnectedUser.name} disconnected`,
+                room: disconnectedUser.room
+            });
+            console.log(`${disconnectedUser.name} disconnected from room: ${disconnectedUser.room}`);
+        }
         console.log(`User disconnected. Users remaining: ${userCount}`);
     });
+});
 
+function broadcastToRoom(roomId: string, message: any, excludeSocket?: WebSocket) {
+    const usersInRoom = allUsers.filter((user) =>
+        user.room === roomId &&
+        user.socket !== excludeSocket &&
+        user.socket.readyState === WebSocket.OPEN
+    );
 
-})
+    usersInRoom.forEach((user) => {
+        user.socket.send(JSON.stringify(message));
+    });
+}
