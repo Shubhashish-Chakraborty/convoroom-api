@@ -1,5 +1,30 @@
+import http from "http";
+import https from "https";
 import WebSocket, { WebSocketServer } from "ws";
-const wss = new WebSocketServer({ port: 3000 });
+
+const PORT = 3001;
+const SERVER_URL = "https://convoroom-api.onrender.com";
+
+const server = http.createServer((req, res) => {
+    if (req.url === "/ping") {
+        res.writeHead(200, { "Content-Type": "text/plain" });
+        res.end("pong");
+        return;
+    }
+    res.writeHead(404);
+    res.end();
+});
+
+const wss = new WebSocketServer({ server });
+
+// Keep-alive logic: Ping the server every 10 minutes to prevent Render's free tier from scaling down
+setInterval(() => {
+    https.get(`${SERVER_URL}/ping`, (res) => {
+        console.log(`Keep-alive ping status: ${res.statusCode}`);
+    }).on("error", (err) => {
+        console.error("Keep-alive ping error:", err.message);
+    });
+}, 600000); // 10 minutes!
 
 // Client Message Schemas:
 
@@ -151,3 +176,7 @@ function broadcastToRoom(roomId: string, message: any, excludeSocket?: WebSocket
         user.socket.send(JSON.stringify(message));
     });
 }
+
+server.listen(PORT, () => {
+    console.log(`Server is listening on port ${PORT}`);
+});
