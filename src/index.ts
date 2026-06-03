@@ -110,6 +110,9 @@ wss.on("connection", (socket: WebSocket) => {
                         room: roomId
                     }, socket); // Exclude the new user from this notification
 
+                    // Broadcast updated user list to everyone in the room
+                    broadcastUserList(roomId);
+
                     console.log(`${username} joined room: ${roomId}`);
                 }
             }
@@ -139,6 +142,9 @@ wss.on("connection", (socket: WebSocket) => {
                         room: leavingUser.room
                     });
 
+                    // Broadcast updated user list
+                    broadcastUserList(leavingUser.room);
+
                     console.log(`${leavingUser.name} left room: ${leavingUser.room}`);
                 }
             }
@@ -153,17 +159,32 @@ wss.on("connection", (socket: WebSocket) => {
         const disconnectedUser = allUsers.find((user) => user.socket === socket);
 
         if (disconnectedUser) {
+            const roomId = disconnectedUser.room;
             allUsers = allUsers.filter((user) => user.socket !== socket);
-            broadcastToRoom(disconnectedUser.room, {
+            broadcastToRoom(roomId, {
                 type: "system",
                 message: `${disconnectedUser.name} disconnected`,
-                room: disconnectedUser.room
+                room: roomId
             });
-            console.log(`${disconnectedUser.name} disconnected from room: ${disconnectedUser.room}`);
+            // Broadcast updated user list
+            broadcastUserList(roomId);
+            console.log(`${disconnectedUser.name} disconnected from room: ${roomId}`);
         }
         console.log(`User disconnected. Users remaining: ${userCount}`);
     });
 });
+
+function broadcastUserList(roomId: string) {
+    const usersInRoom = allUsers
+        .filter((user) => user.room === roomId)
+        .map((user) => user.name);
+
+    broadcastToRoom(roomId, {
+        type: "userList",
+        users: usersInRoom,
+        room: roomId
+    });
+}
 
 function broadcastToRoom(roomId: string, message: any, excludeSocket?: WebSocket) {
     const usersInRoom = allUsers.filter((user) =>
